@@ -390,6 +390,51 @@ async function montarBoleto(d){
   }
 }
 
+
+let restanteBoleto = 6 * 60;
+let contadorBoletoTimer = null;
+let verificacaoSilenciosaTimer = null;
+
+function formatarTempoBoleto(segundos){
+  const m=Math.floor(segundos/60);
+  const s=segundos%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+function iniciarContagemBoleto(){
+  if(contadorBoletoTimer) return;
+  const n=document.getElementById('countdownNumber');
+  if(n) n.textContent=formatarTempoBoleto(restanteBoleto);
+
+  contadorBoletoTimer=setInterval(()=>{
+    if(restanteBoleto>0) restanteBoleto--;
+    if(n) n.textContent=formatarTempoBoleto(restanteBoleto);
+    if(restanteBoleto<=0){
+      clearInterval(contadorBoletoTimer);
+      contadorBoletoTimer=null;
+    }
+  },1000);
+}
+
+function pararContagemBoleto(){
+  if(contadorBoletoTimer){
+    clearInterval(contadorBoletoTimer);
+    contadorBoletoTimer=null;
+  }
+}
+
+function iniciarVerificacaoSilenciosa(){
+  if(verificacaoSilenciosaTimer) return;
+  verificacaoSilenciosaTimer=setInterval(()=>consultarBoleto(true),60000);
+}
+
+function pararVerificacaoSilenciosa(){
+  if(verificacaoSilenciosaTimer){
+    clearInterval(verificacaoSilenciosaTimer);
+    verificacaoSilenciosaTimer=null;
+  }
+}
+
 async function consultarBoleto(silenciosa=false){
   const documento=documentoDoLink();
 
@@ -479,7 +524,11 @@ function salvar(){
   window.print();
 }
 
-window.addEventListener('DOMContentLoaded',consultarBoleto);
+window.addEventListener('DOMContentLoaded',()=>{
+  iniciarContagemBoleto();
+  iniciarVerificacaoSilenciosa();
+  consultarBoleto();
+});
 
 </script>
 <div id="copyModalOverlay" class="copy-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="copyModalTitle">
