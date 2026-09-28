@@ -574,7 +574,7 @@ async function gerarBolItapeva(){
 
  // Banco selecionado: logotipo à esquerda e código ao lado, antes da linha digitável.
  const [banco,codBanco]=itbanco.value.split('|');
- if(BANK_LOGOS[banco]){
+ if(BANK_LOGOS[banco] && banco!=='C6Bank'){
    try{ const lb=await img(BANK_LOGOS[banco]); drawLogo(c,lb,82,944,120,34); }catch(e){}
  }
  text(c,'|',220,968,24,true,'center'); text(c,codBanco,260,968,22,true,'left'); text(c,'|',330,968,24,true,'center');
